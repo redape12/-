@@ -1,0 +1,43 @@
+-- Очищаем таблицу
+TRUNCATE TABLE AlexeyReport.split_baza_test;
+
+-- Вставляем данные
+INSERT INTO AlexeyReport.split_baza_test (city, update_at, speed_segment, records_count, month, year)
+WITH tariff_with_segment AS (
+    SELECT 
+        a.tariff,
+        CASE 
+            WHEN a.gorod = 'Верх-Нейвинск' THEN 'Верх-Нейвинский'
+            ELSE a.gorod 
+        END AS city,
+        a.update_at,
+        s.speed_segment,
+        TO_CHAR(a.update_at, 'MM') AS month,  -- месяц в формате 01, 02, 03
+        EXTRACT(YEAR FROM a.update_at) AS year  -- год
+    FROM 
+        AlexeyReport.aa1_last_day_monthly a
+    INNER JOIN 
+        AlexeyReport.split_baza_view s ON a.tariff = s.tariff
+    WHERE 
+        a.serv = 'Интернет'  -- Добавляем фильтр по типу услуги
+)
+
+SELECT 
+    city,
+    update_at,
+    speed_segment,
+    COUNT(*) AS records_count,
+    month,
+    year
+FROM 
+    tariff_with_segment
+GROUP BY 
+    city, 
+    update_at, 
+    speed_segment,
+    month,
+    year
+ORDER BY 
+    city, 
+    update_at, 
+    speed_segment;
