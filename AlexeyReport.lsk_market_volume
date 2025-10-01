@@ -1,0 +1,135 @@
+-- Удаляем таблицу если существует
+DROP TABLE IF EXISTS AlexeyReport.lsk_market_volume;
+
+-- Создаем таблицу
+CREATE TABLE AlexeyReport.lsk_market_volume AS
+SELECT 
+    `cd`.`year` AS `year`,
+    `cd`.`month` AS `month`,
+    `cd`.`city` AS `city`,
+    `cd`.`total_users` AS `total_users`,
+    `cd`.`total_revenue` AS `total_revenue`,
+    ROUND(IF(`cd`.`total_users` > 0,
+                `cd`.`total_revenue` / `cd`.`total_users`,
+                0),
+            0) AS `combined_arpu`,
+    COALESCE(`f`.`total_flats`, 0) AS `total_flats`,
+    COALESCE(`f`.`txb_flats`, 0) AS `txb_flats`,
+    COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0) AS `txb_potenc`,
+    ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * IF(COALESCE(`p`.`prcnt_pronic`, 0) = 0,
+                1.0,
+                COALESCE(`p`.`prcnt_pronic`, 100) / 100),
+            0) AS `aab_build`,
+    ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * IF(`cd`.`total_users` > 0,
+                `cd`.`total_revenue` / `cd`.`total_users`,
+                0) * IF(COALESCE(`p`.`prcnt_pronic`, 0) = 0,
+                1.0,
+                COALESCE(`p`.`prcnt_pronic`, 100) / 100),
+            0) AS `txb_potenc_revenue_build`,
+    ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * IF(`cd`.`total_users` > 0,
+                `cd`.`total_revenue` / `cd`.`total_users`,
+                0) * 12 * IF(COALESCE(`p`.`prcnt_pronic`, 0) = 0,
+                1.0,
+                COALESCE(`p`.`prcnt_pronic`, 100) / 100),
+            0) AS `txb_potenc_ltv_build`,
+    ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * 3013 + ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * IF(COALESCE(`p`.`prcnt_pronic`, 0) = 0,
+                        1.0,
+                        COALESCE(`p`.`prcnt_pronic`, 100) / 100),
+                    0) * 1829 + ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * IF(COALESCE(`p`.`prcnt_pronic`, 0) = 0,
+                        1.0,
+                        COALESCE(`p`.`prcnt_pronic`, 100) / 100),
+                    0) * CASE
+                WHEN `cd`.`city` = 'Верх-Нейвинский' THEN 1409
+                WHEN `cd`.`city` = 'Верхняя Пышма' THEN 426
+                WHEN `cd`.`city` = 'Краснотурьинск' THEN 177
+                WHEN `cd`.`city` = 'Красноуральск' THEN 778
+                WHEN `cd`.`city` = 'Рубцовск' THEN 1262
+                WHEN `cd`.`city` = 'Серов' THEN 145
+                WHEN `cd`.`city` = 'Екатеринбург' THEN 956
+                ELSE 0
+            END,
+            0) AS `txb_potenc_connection_rashod`,
+    ROUND(COALESCE((SELECT 
+                            `at`.`value`
+                        FROM
+                            `aab_txb` `at`
+                        WHERE
+                            `at`.`city` = `cd`.`city`
+                                AND `at`.`year` = `cd`.`year`
+                                AND `at`.`month` = `cd`.`month`
+                                AND `at`.`category` = 'Свободный ресурс ТХВ'),
+                    0) * IF(`cd`.`total_users` > 0,
+                `cd`.`total_revenue` / `cd`.`total_users`,
+                0) * 12,
+            0) AS `txb_potenc_ltv_pronic`,
+    ROUND(CASE
+                WHEN `cd`.`city` = 'Верх-Нейвинский' THEN 6251
+                WHEN `cd`.`city` = 'Верхняя Пышма' THEN 5268
+                WHEN `cd`.`city` = 'Краснотурьинск' THEN 5019
+                WHEN `cd`.`city` = 'Красноуральск' THEN 5620
+                WHEN `cd`.`city` = 'Рубцовск' THEN 6104
+                WHEN `cd`.`city` = 'Серов' THEN 4987
+                WHEN `cd`.`city` = 'Екатеринбург' THEN 5798
+                ELSE NULL
+            END / NULLIF(ROUND(IF(`cd`.`total_users` > 0,
+                                `cd`.`total_revenue` / `cd`.`total_users`,
+                                0),
+                            0),
+                    0),
+            1) AS `payback_period_months_build`,
+    ROUND((COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * COALESCE((SELECT 
+                            SUM(`sm`.`lifetime_value`)
+                        FROM
+                            `service_metrics_by_city` `sm`
+                        WHERE
+                            `sm`.`year` = `cd`.`year`
+                                AND `sm`.`month` = `cd`.`month`
+                                AND `sm`.`city` = `cd`.`city`
+                                AND `sm`.`serv` IN ('интернет' , 'ктв')),
+                    0) - (COALESCE(`f`.`total_flats`, 0) - COALESCE(`f`.`txb_flats`, 0)) * CASE
+                WHEN `cd`.`city` = 'Верх-Нейвинский' THEN 6251
+                WHEN `cd`.`city` = 'Верхняя Пышма' THEN 5268
+                WHEN `cd`.`city` = 'Краснотурьинск' THEN 5019
+                WHEN `cd`.`city` = 'Красноуральск' THEN 5620
+                WHEN `cd`.`city` = 'Рубцовск' THEN 6104
+                WHEN `cd`.`city` = 'Серов' THEN 4987
+                WHEN `cd`.`city` = 'Екатеринбург' THEN 5798
+                ELSE 0
+            END,
+            0) AS `delta_build_ltv_vs_connect`,
+    ROUND(IF(`cd`.`total_users` > 0,
+                `cd`.`total_revenue` / `cd`.`total_users` * COALESCE(`f`.`total_flats`, 0),
+                0),
+            0) AS `arpu_multiplied_by_flats`,
+    ROUND(IF(`cd`.`total_users` > 0,
+                `cd`.`total_revenue` / `cd`.`total_users` * COALESCE(`f`.`total_flats`, 0) - `cd`.`total_revenue`,
+                - `cd`.`total_revenue`),
+            0) AS `revenue_difference`
+FROM
+    (((SELECT 
+        `service_metrics_by_city`.`year` AS `year`,
+            `service_metrics_by_city`.`month` AS `month`,
+            `service_metrics_by_city`.`city` AS `city`,
+            SUM(`service_metrics_by_city`.`users`) AS `total_users`,
+            SUM(`service_metrics_by_city`.`revenue`) AS `total_revenue`
+    FROM
+        `service_metrics_by_city`
+    WHERE
+        `service_metrics_by_city`.`city` <> 'Кировград'
+    GROUP BY `service_metrics_by_city`.`year` , `service_metrics_by_city`.`month` , `service_metrics_by_city`.`city`) `cd`
+    LEFT JOIN (SELECT 
+        `area_normalized`.`city` AS `city`,
+            SUM(`area_normalized`.`flat`) AS `total_flats`,
+            SUM(CASE
+                WHEN `area_normalized`.`ID_h` NOT LIKE '#Н/Д' THEN `area_normalized`.`flat`
+                WHEN `area_normalized`.`tech` LIKE 'ТХВ' THEN `area_normalized`.`flat`
+                ELSE 0
+            END) AS `txb_flats`
+    FROM
+        `area_normalized`
+    WHERE
+        `area_normalized`.`flat` > 0
+    GROUP BY `area_normalized`.`city`) `f` ON (`cd`.`city` = `f`.`city`))
+    LEFT JOIN `prcnt_pronic` `p` ON (`cd`.`city` = `p`.`city`
+        AND `cd`.`year` = `p`.`year`
+        AND `cd`.`month` = `p`.`month`));
