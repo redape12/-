@@ -1,0 +1,126 @@
+-- Очищаем таблицу перед обновлением
+TRUNCATE TABLE AlexeyReport.aa1_heads_monthly;
+
+-- Вставляем новые данные
+INSERT INTO AlexeyReport.aa1_heads_monthly (city, month, year, type, unique_titles_count)
+WITH normalized_data AS (
+    SELECT 
+        CASE 
+            WHEN gorod LIKE '%Верх-Нейвниск%' THEN 'Верх-Нейвинский'
+            WHEN gorod LIKE '%Верх-Нейвинск%' THEN 'Верх-Нейвинский'
+            WHEN gorod LIKE '%Верх-Нейвинский%' THEN 'Верх-Нейвинский'
+            WHEN gorod LIKE '%Верхняя Пышма%' THEN 'Верхняя Пышма'
+            WHEN gorod LIKE '%Екатеринбург%' THEN 'Екатеринбург'
+            WHEN gorod LIKE '%Краснотурьинск%' THEN 'Краснотурьинск'
+            WHEN gorod LIKE '%Красноуральск%' THEN 'Красноуральск'
+            WHEN gorod LIKE '%Серов%' THEN 'Серов'
+            WHEN gorod LIKE '%Рубцовск%' THEN 'Рубцовск'
+            WHEN gorod LIKE '%Кировград%' THEN 'Кировград'
+            WHEN gorod LIKE '%Москва%' THEN 'Москва'
+            ELSE gorod
+        END AS city,
+        EXTRACT(MONTH FROM update_at) AS month,
+        EXTRACT(YEAR FROM update_at) AS year,
+        title,
+        fio
+    FROM 
+        AlexeyReport.aa1_last_day_monthly
+),
+
+grouped_data AS (
+    -- B2B (title начинается с '1%')
+    SELECT 
+        city,
+        month,
+        year,
+        'B2B' AS type,
+        COUNT(DISTINCT fio) AS unique_titles_count
+    FROM 
+        normalized_data
+    WHERE 
+        title LIKE '1%'
+    GROUP BY 
+        city, month, year
+
+    UNION ALL
+
+    -- B2C (title начинается с '2%')
+    SELECT 
+        city,
+        month,
+        year,
+        'B2C' AS type,
+        COUNT(DISTINCT fio) AS unique_titles_count
+    FROM 
+        normalized_data
+    WHERE 
+        title LIKE '2%'
+    GROUP BY 
+        city, month, year
+
+    UNION ALL
+
+    -- ALL (все записи, без фильтрации)
+    SELECT 
+        city,
+        month,
+        year,
+        'ALL' AS type,
+        COUNT(DISTINCT fio) AS unique_titles_count
+    FROM 
+        normalized_data
+    GROUP BY 
+        city, month, year
+),
+
+-- Добавляем строку "!Все города" (агрегация по всем городам)
+final_data AS (
+    SELECT * FROM grouped_data
+    
+    UNION ALL
+    
+    SELECT 
+        '!Все города' AS city,
+        month,
+        year,
+        type,
+        SUM(unique_titles_count) AS unique_titles_count
+    FROM 
+        grouped_data
+    WHERE 
+        city != '!Все города'
+    GROUP BY 
+        month, year, type
+)
+
+-- Выбираем данные для вставки
+SELECT 
+    city,
+    month,
+    year,
+    type,
+    unique_titles_count
+FROM 
+    final_data;
+
+-- Проверяем, что данные загрузились
+SELECT 
+    COUNT(*) as total_rows,
+    MIN(year) as min_year,
+    MAX(year) as max_year,
+    COUNT(DISTINCT city) as unique_cities,
+    COUNT(DISTINCT type) as unique_types
+FROM 
+    AlexeyReport.aa1_heads_monthly;
+
+-- Проверим конкретно какие значения есть для Верх-Нейвинска
+SELECT DISTINCT gorod
+FROM AlexeyReport.aa1_last_day_monthly 
+WHERE gorod LIKE '%Верх%Нейв%';
+
+-- Показываем пример данных
+SELECT *
+FROM AlexeyReport.aa1_heads_monthly
+WHERE city LIKE '%Верх%Нейв%'
+ORDER BY year, month, city, type
+LIMIT 20;
